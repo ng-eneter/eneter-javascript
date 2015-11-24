@@ -1,0 +1,101 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8" />
+
+    <title>WebSocketDuplexOutputChannel Example</title>
+
+    <script type="text/javascript" src="eneter-messaging-6.0.0.js"></script>
+    <script type="text/javascript">
+        // Get DIV where the response message will be dislayed.
+        var anOutput = document.getElementById("output");
+
+        // Create the duplex output channel.
+        var anOutputChannel = new WebSocketDuplexOutputChannel("ws://127.0.0.1:8077/MyBroker/", null);
+
+        // Create BrokerClient
+        var aBrokerClient = new DuplexBrokerClient();
+
+
+        // Subscribe to notifications.
+        aBrokerClient.onConnectionOpened = onConnectionOpened;
+        aBrokerClient.onConnectionClosed = onConnectionClosed;
+        aBrokerClient.onBrokerMessageReceived = onBrokerMessageReceived;
+
+        
+        function MyTimeEvent(currentTime) {
+            this.CurrentTime = currentTime;
+        };
+
+
+        function openConnection() {
+            // Attach output channel and be able to send messages and receive responses.
+            aBrokerClient.attachDuplexOutputChannel(anOutputChannel);
+        };
+
+        function closeConnection() {
+            // Detach output channel and stop listening to responses.
+            aBrokerClient.detachDuplexOutputChannel();
+        };
+
+        function subscribe() {
+            aBrokerClient.subscribe("MyTimeEvent");
+        };
+
+        function unsubscribe() {
+            aBrokerClient.unsubscribe("MyTimeEvent");
+        };
+
+        function publish() {
+            var aTimeEvent = new MyTimeEvent(document.getElementById("input").value);
+            var aSerializedEvent = JSON.stringify(aTimeEvent);
+            aBrokerClient.sendMessage("MyTimeEvent", aSerializedEvent);
+        };
+
+        function onConnectionOpened(duplexChannelEventArgs) {
+            var aMsg = "Connected: ChannelId='" + duplexChannelEventArgs.ChannelId + "' ResponseReceiverId='" + duplexChannelEventArgs.ResponseReceiverId + "'";
+            writeOnScreen(aMsg);
+        }
+
+        function onConnectionClosed(duplexChannelEventArgs) {
+            var aMsg = "Disconnected: ChannelId='" + duplexChannelEventArgs.ChannelId + "' ResponseReceiverId='" + duplexChannelEventArgs.ResponseReceiverId + "'";
+            writeOnScreen(aMsg);
+        }
+
+        function onBrokerMessageReceived(brokerMessageReceivedEventArgs) {
+            if (brokerMessageReceivedEventArgs.MessageTypeId == "MyTimeEvent")
+            {
+                var aValue = JSON.parse(brokerMessageReceivedEventArgs.Message);
+                writeOnScreen(aValue.CurrentTime);
+            }
+        }
+
+        // Displays a text message on the screen.
+        function writeOnScreen(msg) {
+            var pre = document.createElement("p");
+            pre.style.wordWrap = "break-word";
+            pre.innerHTML = msg;
+            output.appendChild(pre);
+        }
+
+    </script>
+</head>
+<body>
+
+    <div>
+        <button type="button" onclick="openConnection()">Open Connection</button>
+    </div>
+    <div>
+        <button type="button" onclick="subscribe()">Subscribe</button>
+        <button type="button" onclick="unsubscribe()">Unsubscribe</button>
+        <input id="input" type="text" value="Hello world" />
+        <button type="button" onclick="publish()">Publish</button>
+    </div>
+    <div>
+        <button type="button" onclick="closeConnection()">Close Connection</button>
+    </div>
+    <div id="output">
+    </div>
+
+</body>
+</html>
