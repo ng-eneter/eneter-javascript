@@ -294,6 +294,243 @@ DuplexBrokerClient.prototype = new AttachableDuplexOutputChannelBase();
 DuplexBrokerClient.constructor = DuplexBrokerClient;
 
 /**
+ * Sends and receives messages of multiple types.
+ * Messages are serialized/deserialized using Json.
+ * 
+ * @class
+ * 
+ * @example
+ * // Declare response message.
+ * function MyResponseMessage1 {
+ *    this.Number;
+ * };
+ * 
+ * // Declare some other type of response message.
+ * function MyResponseMessage2 {
+ *    this.Name;
+ *    this.Count;
+ * };
+ * 
+ * // Create the duplex output channel.
+ * var anOutputChannel = new WebSocketDuplexOutputChannel("ws://127.0.0.1:8890/MyService/", null);
+ * 
+ * // Create MultiTypedMessageSender.
+ * var aSender = new MultiTypedMessageSender();
+ * 
+ * // Register handlers to receive messages.
+ * aSender.registerResponseMessageReceiver(onResponseMessage1, "MyResponseMessage1");
+ * aSender.registerResponseMessageReceiver(onResponseMessage2, "MyResponseMessage2");
+ * 
+ * // Attach output channel and be able to send messages and receive responses.
+ * aSender.attachDuplexOutputChannel(anOutputChannel);
+ * 
+ * ...
+ * 
+ * // Message which shall be sent. 
+ * function RequestMessage(name) {
+ *     this.Name = name;
+ * };
+ * 
+ * // Send a message.
+ * var aMessage = new RequestMessage("Hello World.");
+ * aSender.sendRequestMessage(aMessage, aMessage.constructor.name);
+ * 
+ * ...
+ * 
+ * // Detach output channel and stop listening to responses.
+ * aSender.detachDuplexOutputChannel();
+ * 
+ * ...
+ * 
+ * // Handler processing response message 1
+ * function onResponseMessage1(typedResponseReceivedEventArgs) {
+ * 
+ *     // Note: aMessage is already deserialized message.
+ *     var aMessage = typedResponseReceivedEventArgs.ResponseMessage;
+ *     ...
+ * };
+ * 
+ * // Handler processing response message 2
+ * function onResponseMessage1(typedResponseReceivedEventArgs) {
+ * 
+ *     // Note: aMessage is already deserialized message.
+ *     var aMessage = typedResponseReceivedEventArgs.ResponseMessage;
+ *     ...
+ * };
+ * 
+ */
+function MultiTypedMessageSender()
+{
+    // MultiTypedMessage declaration.
+    function MultiTypedMessage()
+    {
+        this.TypeName = null;
+        this.MessageData = null;
+    };
+    
+    var mySerializer = new JsonSerializer();
+    var mySender = new DuplexTypedMessageSender();
+    var myMessageHandlers = new EneterHashMap();
+    
+    mySender.onConnectionOpened = onConnectionOpened;
+    mySender.onConnectionClosed = onConnectionClosed;
+    mySender.onResponseReceived = onResponseMessageReceived;
+    
+    
+    /**
+     * The event which can be subscribed to receive the notification when the connection is open.
+     * @example
+     * // Set your handler to receive open connection notification. 
+     * aSender.onConnectionOpened = yourOnConnectionOpened;
+     */
+    this.onConnectionOpened = function(duplexChannelEventArgs) {};
+
+    /**
+     * The event which can be subscribed to receive the notification when the connection was closed.
+     * @example
+     * // Set your handler to receive close connection notification.
+     * aSender.onConnectionClosed = yourOnConnectionClosed;
+     */
+    this.onConnectionClosed = function(duplexChannelEventArgs) {};
+    
+    /**
+     * Attaches the duplex output channel and opens the connection for sending request messages
+     * and receiving response messages.
+     * @param {WebSocketDuplexOutputChannel} outputChannel
+     * @throws Throws an error if attaching fails.
+     */
+    this.attachDuplexOutputChannel = function(outputChannel)
+    {
+        mySender.attachDuplexOutputChannel(outputChannel);
+    };
+
+    /**
+     * Detaches the duplex output channel and stops listening to response messages.
+     */
+    this.detachDuplexOutputChannel = function()
+    {
+        mySender.detachDuplexOutputChannel();
+    };
+
+    /**
+     * Returns true if the reference to the duplex output channel is stored.
+     */
+    this.isDuplexOutputChannelAttached = function()
+    {
+        return mySender.isDuplexOutputChannelAttached();
+    };
+
+    /**
+     * Returns attached duplex output channel.
+     */
+    this.getAttachedDuplexOutputChannel = function()
+    {
+        return mySender.getAttachedDuplexOutputChannel();
+    };
+    
+    /**
+     * Registers response message handler for specified message type.
+     * @param {TypedResponseReceivedEventArgs} handler function expecting TypedResponseReceivedEventArgs as input parameter.
+     * @param {String} clazz name of the message type.
+     * @throws Throws an error if a handler for the specified message type is already registered.
+     */
+    this.registerResponseMessageReceiver = function(handler, clazz)
+    {
+        if (handler === null)
+        {
+            var anError = "Failed to register handler for message " + clazz + " because the input parameter handler is null.";
+            logError(anError);
+            throw new Error(anError);
+        }
+        
+        var aNetTypeName = clazz;
+        var aMessageHandler = myMessageHandlers.get(aNetTypeName);
+        if (aMessageHandler !== null)
+        {
+            var anError = "Failed to register handler for message " + aNetTypeName + " because the handler for such class name is already registered.";
+            logError(anError);
+            throw new Error(anError);
+        }
+        
+        myMessageHandlers.put(aNetTypeName, handler);
+    }
+    
+    /**
+     * Unregisters the message handler.
+     * @param {String} clazz message type for which the handler shall be unregistered.
+     */
+    this.unregisterResponseMessageReceiver = function(clazz)
+    {
+        var aNetTypeName = clazz;
+        myMessageHandlers.remove(clazz);
+    }
+    
+    /**
+     * Returns array of types which have registered handlers.
+     * @Returns {String[]} type names which are registered for receiving.
+     */
+    this.getRegisteredResponseMessageTypes = function()
+    {
+        return myMessageHandlers.keys();
+    }
+    
+    /**
+     * Sends a message.
+     * @param message object which shall be sent.
+     * @param {String} clazz message object type name.
+     */
+    this.sendRequestMessage = function(message, clazz)
+    {
+        try
+        {
+            var aMessage = new MultiTypedMessage();
+            aMessage.TypeName = clazz;
+            aMessage.MessageData = mySerializer.serialize(message);
+    
+            mySender.sendRequestMessage(aMessage);
+        }
+        catch (err)
+        {
+            logError("Failed to send the message.", err);
+            throw err;
+        }
+    }
+    
+    function onResponseMessageReceived(typedResponseReceivedEventArgs)
+    {
+        if (typedResponseReceivedEventArgs.ResponseMessage === null)
+        {
+            return;
+        }
+        
+        var aMultiTypedMessage = typedResponseReceivedEventArgs.ResponseMessage;
+        var aDeserializedMessageData = null;
+        var anError = null;
+        
+        try
+        {
+            // Deserialize incoming message.
+            aDeserializedMessageData = mySerializer.deserialize(aMultiTypedMessage.MessageData);
+        }
+        catch (err)
+        {
+            anError = err;
+            logError("Failed to deserialize the response message.", err);
+        }
+
+        // Call handler.
+        var aHandler = myMessageHandlers.get(aMultiTypedMessage.TypeName);
+        if (aHandler !== null)
+        {
+            var aResponseReceivedEventArgs = new TypedResponseReceivedEventArgs(aDeserializedMessageData, anError);
+            aHandler(aResponseReceivedEventArgs);
+        }
+    }
+};
+
+
+
+/**
  * Event arguments for receiving a response message from DuplexTypedMessageSender.
  * @class
  */
@@ -325,7 +562,7 @@ function TypedResponseReceivedEventArgs(responseMessage, receivingError)
  * // Create DuplexTypedMessageSender.
  * var aSender = new DuplexTypedMessageSender();
  * 
- * // Subscribe to receive response messsages.
+ * // Subscribe to receive response messages.
  * aSender.onResponseReceived = onResponseReceived;
  * 
  * // Attach output channel and be able to send messages and receive responses.
@@ -370,8 +607,24 @@ function DuplexTypedMessageSender()
     var mySelf = this;
     
     /**
-     * The event is invoked when a response message was received.
-     * @param {TypedResponseReceivedEventArgs} responseMessage received response message. 
+     * The event which can be subscribed to receive response messages.
+     * @param {TypedResponseReceivedEventArgs} responseMessage received response message.
+     * @example
+     * // Create DuplexTypedMessageSender.
+     * var aSender = new DuplexTypedMessageSender();
+     * 
+     * // Subscribe to receive response messages.
+     * aSender.onResponseReceived = onResponseReceived;
+     * 
+     * ...
+     * 
+     * // Event handler processing received response messages.
+     * function onResponseReceived(typedResponseReceivedEventArgs) {
+     * 
+     *     // Note: aMessage is already deserialized message.
+     *     var aMessage = typedResponseReceivedEventArgs.ResponseMessage;
+     *     ...
+     * }
      */
     this.onResponseReceived = function(responseMessage) {};
     
@@ -468,12 +721,18 @@ function AttachableDuplexOutputChannelBase()
     var myOutputChannel = null;
 
     /**
-     * The event is invoked when the connection with the duplex input channel was opened.
+     * The event which can be subscribed to receive the notification when the connection is open.
+     * @example
+     * // Set your handler to receive open connection notification. 
+     * aSender.onConnectionOpened = yourOnConnectionOpened;
      */
     this.onConnectionOpened = function(duplexChannelEventArgs) {};
 
     /**
-     * The event is invoked when the connection with the duplex input channel was closed.
+     * The event which can be subscribed to receive the notification when the connection was closed.
+     * @example
+     * // Set your handler to receive close connection notification.
+     * aSender.onConnectionClosed = yourOnConnectionClosed;
      */
     this.onConnectionClosed = function(duplexChannelEventArgs) {};
 
@@ -1491,7 +1750,7 @@ function Utf16EncodingBase(isLittleEndian)
 }
 
 //API: no
-// Dynamic data view which extends automaticaly
+// Dynamic data view which extends automatically
 function DynamicDataView(arrayBufferOrSize)
 {
     var mySize;
@@ -1609,6 +1868,82 @@ function getGuid()
 function isNullOrEmpty(stringValue)
 {
     return stringValue === null || stringValue === "";
+};
+
+// API: no
+// HashMap class
+function EneterHashMap()
+{
+    var myLength = 0;
+    var myItems = {};
+
+    this.put = function(key, value)
+    {
+        if (!this.containsKey(key))
+        {
+            ++myLength;
+        }
+        myItems[key] = value;
+    }
+
+    this.get = function(key)
+    {
+        return this.containsKey(key) ? myItems[key] : null;
+    }
+
+    this.containsKey = function(key)
+    {
+        return myItems.hasOwnProperty(key);
+    }
+   
+    this.remove = function(key)
+    {
+        if (this.containsKey(key))
+        {
+            var aRemovedItem = this.items[key];
+            --myLength;
+            
+            delete myItems[key];
+            
+            return aRemovedItem;
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    this.keys = function()
+    {
+        var aKeys = [];
+        for (var k in myItems)
+        {
+            if (this.containsKey(k))
+            {
+                aKeys.push(k);
+            }
+        }
+        return aKeys;
+    }
+
+    this.values = function()
+    {
+        var aValues = [];
+        for (var k in myItems)
+        {
+            if (this.containsKey(k))
+            {
+                aValues.push(myItems[k]);
+            }
+        }
+        return aValues;
+    }
+
+    this.clear = function()
+    {
+        myItems = {}
+        myLength = 0;
+    }
 };
 
 function logError(message, exception)

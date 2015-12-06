@@ -5,26 +5,28 @@
 
     <title>WebSocketDuplexOutputChannel Example</title>
 
-    <script type="text/javascript" src="eneter-messaging-6.0.0.js"></script>
+    <script type="text/javascript" src="eneter-messaging-7.0.0.js"></script>
     <script type="text/javascript">
         // Get DIV where the response message will be dislayed.
         var anOutput = document.getElementById("output");
 
         // Create the duplex output channel.
-        var anOutputChannel = new WebSocketDuplexOutputChannel("ws://127.0.0.1:8890/MyService/", null);
+        var anOutputChannel = new WebSocketDuplexOutputChannel("ws://127.0.0.1:8033/Service/", null);
 
-        // Create DuplexTypedMessageSender.
-        var aSender = new DuplexTypedMessageSender();
+        // Create MultiTypedMessageSender.
+        var aSender = new MultiTypedMessageSender();
 
 
         // Subscribe to notifications.
         aSender.onConnectionOpened = onConnectionOpened;
         aSender.onConnectionClosed = onConnectionClosed;
-        aSender.onResponseReceived = onResponseReceived;
+        
+        // Register message handler
+        aSender.registerResponseMessageReceiver(onResponseReceived_Double, "Double");
 
-        function MessageData(name, number) {
-            this.Name = name;
-            this.Number = number;
+        function MyRequestMessage(number1, number2) {
+            this.Number1 = number1;
+            this.Number2 = number2;
         };
 
 
@@ -40,8 +42,8 @@
 
         function sendMessage() {
             //Text-box for the input.
-            var aMessage = new MessageData(document.getElementById("input").value, 123);
-            aSender.sendRequestMessage(aMessage);
+            var aMessage = new MyRequestMessage(10, 20);
+            aSender.sendRequestMessage(aMessage, aMessage.constructor.name);
         };
 
         function onConnectionOpened(duplexChannelEventArgs) {
@@ -54,7 +56,7 @@
             writeOnScreen(aMsg);
         }
 
-        function onResponseReceived(typedResponseReceivedEventArgs) {
+        function onResponseReceived_Double(typedResponseReceivedEventArgs) {
             var aValue = typedResponseReceivedEventArgs.ResponseMessage;
             writeOnScreen(aValue);
         }
