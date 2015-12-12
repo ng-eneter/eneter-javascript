@@ -822,6 +822,202 @@ function AttachableDuplexOutputChannelBase()
     };
 };
 
+function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLoginMessageCallback, getHandshakeResponseMessageCallback)
+{
+    if (!underlyingDuplexOutputChannel)
+    {
+        throw new Error("Failed to create AuthenticatedDuplexOutputChannel because input parameter underlyingDuplexOutputChannel is null.");
+    }
+    if (!getLoginMessageCallback)
+    {
+        throw new Error("Failed to create AuthenticatedDuplexOutputChannel because input parameter getLoginMessageCallback is null.");
+    }
+    if (!getHandshakeResponseMessageCallback)
+    {
+        throw new Error("Failed to create AuthenticatedDuplexOutputChannel because input parameter getHandshakeResponseMessageCallback is null.");
+    }
+    
+    var myUnderlyingOutputChannel = underlyingDuplexOutputChannel;
+    myUnderlyingOutputChannel.onResponseMessageReceived = _onResponseMessageReceived;
+    myUnderlyingOutputChannel.onConnectionOpened = _onConnectionOpened;
+    myUnderlyingOutputChannel.onConnectionClosed = _onConnectionClosed;
+    
+    var myGetLoginMessageCallback = getLoginMessageCallback;
+    var myGetHandshakeResponseMessageCallback = getHandshakeResponseMessageCallback;
+    
+    var myIsHandshakeResponseSent = false;
+    var myIsConnectionAcknowledged = false;
+    var myTracedObject = "AuthenticatedDuplexOutputChannel ";
+    
+    // Store the context of this class.
+    var mySelf = this;
+    
+    
+    this.onResponseMessageReceived = function(duplexChannelMessageEventArgs) {};
+    
+    this.onConnectionOpened = function(duplexChannelEventArgs) {};
+
+    this.onConnectionClosed = function(duplexChannelEventArgs) {};
+    
+    this.getChannelId = function()
+    {
+        return myUnderlyingOutputChannel.getChannelId();
+    };
+
+    this.getResponseReceiverId = function()
+    {
+        return myUnderlyingOutputChannel.getResponseReceiverId();
+    };
+    
+    this.openConnection = function()
+    {
+        if (this.isConnected())
+        {
+            throw new Error("Connection is already open.");
+        }
+
+        try
+        {
+            myIsHandshakeResponseSent = false;
+            myIsConnectionAcknowledged = false;
+
+            // Once the connection is open the code continues in _onConnectionOpened().
+            myUnderlyingOutputChannel.openConnection();
+        }
+        catch (err)
+        {
+            logError(myTracedObject + "failed to open connection.", err);
+            closeConnection();
+            throw err;
+        }
+    };
+    
+    this.closeConnection = function()
+    {
+        myUnderlyingOutputChannel.closeConnection();
+    };
+    
+    this.isConnected = function()
+    {
+        return myUnderlyingOutputChannel.isConnected();
+    };
+    
+    this.sendMessage = function(message)
+    {
+        if (!this.isConnected())
+        {
+            var aMessage = myTracedObject + "failed to send the message because the output channel is not connected.";
+            logError(aMessage);
+            throw new Error(aMessage);
+        }
+
+        myUnderlyingOutputChannel.sendMessage(message);
+    };
+    
+    function _onConnectionOpened(duplexChannelEventArgs)
+    {
+        var aLoginMessage;
+        try
+        {
+            aLoginMessage = myGetLoginMessageCallback(this.getChannelId(), this.getResponseReceiverId());
+        }
+        catch (err)
+        {
+            logError(myTracedObject + "failed to get the login message.", err);
+            throw err;
+        }
+        
+        try
+        {
+            myUnderlyingOutputChannel.sendMessage(aLoginMessage);
+        }
+        catch (err)
+        {
+            logError(myTracedObject + "failed to send the login message.", err);
+            throw err;
+        }
+    }
+    
+    function _onConnectionClosed(duplexChannelEventArgs)
+    {
+        mySelf.onConnectionClosed(duplexChannelEventArgs);
+    }
+    
+    function _onResponseMessageReceived(duplexChannelMessageEventArgs)
+    {
+        if (myIsConnectionAcknowledged)
+        {
+            mySelf.onResponseMessageReceived(duplexChannelMessageEventArgs);
+            return;
+        }
+        
+        var aCloseConnectionFlag = false;
+        
+        // This is the handshake message.
+        if (!myIsHandshakeResponseSent)
+        {
+            //HANDSHAKE RECEIVED
+            
+            var aHandshakeResponseMessage;
+            try
+            {
+                aHandshakeResponseMessage = myGetHandshakeResponseMessageCallback(
+                        duplexChannelMessageEventArgs.ChannelId,
+                        duplexChannelMessageEventArgs.ResponseReceiverId,
+                        duplexChannelMessageEventArgs.Message);
+                
+                aCloseConnectionFlag = (aHandshakeResponseMessage === null);
+            }
+            catch (err)
+            {
+                logError(myTracedObject + "failed to get the handshake response message. The connection will be closed.", err)
+                aCloseConnectionFlag = true;
+            }
+            
+            // Send back the response for the handshake.
+            if (!aCloseConnectionFlag)
+            {
+                try
+                {
+                    // Note: keep setting this flag before sending. Otherwise synchronous messaging will not work!
+                    myIsHandshakeResponseSent = true;
+                    myUnderlyingOutputChannel.sendMessage(aHandshakeResponseMessage);
+                }
+                catch (err)
+                {
+                    myIsHandshakeResponseSent = false;
+
+                    logError(myTracedObject + "failed to send the handshake response message. The connection will be closed.", err);
+
+                    aCloseConnectionFlag = true;
+                }
+            }
+        }
+        else
+        {
+            // CONNECTION ACKNOWLEDGE RECEIVED
+            
+            var anAcknowledgeMessage = duplexChannelMessageEventArgs.Message;
+            if (anAcknowledgeMessage !== "OK")
+            {
+                logError(myTracedObject + "detected incorrect acknowledge message. The connection will be closed.");
+                aCloseConnectionFlag = true;
+            }
+            else
+            {
+                myIsConnectionAcknowledged = true;
+                var anEventArgs = new DuplexChannelEventArgs(mySelf.getChannelId(), mySelf.getResponseReceiverId());
+                onConnectionOpened(anEventArgs);
+            }
+        }
+        
+        if (aCloseConnectionFlag)
+        {
+            myUnderlyingOutputChannel.closeConnection();
+        }
+    }
+};
+
 /**
  * Event arguments used to for connection related events. (e.g. onConnectionOpened, onConnectionClosed)
  * @class
@@ -1011,7 +1207,7 @@ function WebSocketDuplexOutputChannel(webSocketUri, responseReceiverId, protocol
         catch (err)
         {
             // Note: In case the service is not running the openConnection will not fail
-            // but onClose() callback will be called - this is the JavaScript WebSocket object behavior.
+            // but onClose() callback will be called - this is the JavaScript WebSocket behavior.
             logError(myTracedObject + "failed to open connection.", err);
             closeConnection();
             throw err;
