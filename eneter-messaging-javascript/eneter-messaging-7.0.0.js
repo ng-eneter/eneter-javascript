@@ -836,8 +836,48 @@ function AttachableDuplexOutputChannelBase()
     };
 };
 
+/**
+ * Output channel providing authentication mechanism.<br/>
+ * <br/>
+ * Here is how the authentication procedure works:
+ * <ol>
+ * <li>AuthenticatedDuplexOutputChannel calls getLoginMessage callback and gets the login message. Then
+ *     sends it to AuthenticatedDuplexInputChannel.</li>
+ * <li>AuthenticatedDuplexInputChannel receives the login message and calls getHandshakeMessage callback.
+ *     The returned handshake message is sent to AuthenticatedDuplexOutputChannel.</li>
+ * <li>AuthenticatedDuplexOutputChannel receives the handshake message and calls getHandshakeResponseMessage.
+ *     The returned handshake response message is then sent to AuthenticatedDuplexInputChannel.</li>
+ * <li>AuthenticatedDuplexInputChannel receives the handshake response message and calls authenticate callback.
+ *     if it returns true the connection is established.</li>
+ * </ol>
+ * 
+ * @class
+ * @param {WebSocketDuplexOutputChannel | MessageBusOutputChannel} underlyingDuplexOutputChannel underlying output channel which shall be used for the communication.
+ * @param {AuthenticatedDuplexOutputChannel~getLoginMessageCallback} getLoginMessageCallback callback method returning login message.
+ * @param {AuthenticatedDuplexOutputChannel~getHandshakeResponseMessageCallback} getHandshakeResponseMessageCallback callback method returning response message for the handshake message.
+ * 
+ */
 function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLoginMessageCallback, getHandshakeResponseMessageCallback)
 {
+    /**
+     * Callback method which is used by {@link AuthenticatedDuplexOutputChannel} to get the login message.
+     * @callback AuthenticatedDuplexOutputChannel~getLoginMessageCallback
+     * @param {String} channelId address which shall be connected.
+     * @param {String} responseReceiverId unique id representing the connection.
+     * @return {String | ArrayBuffer} login message
+     */
+    function getLoginMessage(channelId, responseReceiverId){};
+    
+    /**
+     * Callback method which is used by {@link AuthenticatedDuplexOutputChannel} to get the response for the handshake message.
+     * @callback AuthenticatedDuplexOutputChannel~getHandshakeResponseMessageCallback
+     * @param {String} channelId address which shall be connected.
+     * @param {String} responseReceiverId unique id representing the connection.
+     * @param {String | ArrayBuffer} handshakeMessage handshake message received from the service.
+     * @return {String | ArrayBuffer} response for the handshake message.
+     */
+    function getHandshakeResponseMessage(channelId, responseReceiverId, handshakeMessage){};
+    
     if (!underlyingDuplexOutputChannel)
     {
         throw new Error("Failed to create AuthenticatedDuplexOutputChannel because input parameter underlyingDuplexOutputChannel is null.");
