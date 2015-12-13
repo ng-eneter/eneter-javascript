@@ -1018,6 +1018,212 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
     }
 };
 
+function MessageBusOutputChannel(serviceId, responseReceiverId, messageBusOutputChannel, serializer)
+{
+    // Message data structure used for the communication with MessageBus.
+    function MessageBusMessage()
+    {
+        this.Request = null;
+        this.Id = null;
+        this.MessageData = null;
+    };
+    
+    // Custom serializer which can serialize/deserialize only MessageBusMessage.
+    function MessageBusCustomSerializer()
+    {
+        var myStringEncoding = new Utf8Encoding();
+        
+        this.serialize = function(messageBusMessage)
+        {
+            var anInitializeSize = 100;
+            var aDynamicDataView = new DynamicDataView(anInitializeSize);
+            var aWriter = new EncoderDecoder(aDynamicDataView);
+            
+            // Write messagebus request.
+            aWriter.writeByte(messageBusMessage.Request);
+            
+            // Write Id.
+            aWriter.writePlainString(messageBusMessage.Id, myStringEncoding, true);
+            
+            // Write message data.
+            if (messageBusMessage.Request === 50 || messageBusMessage.Request === 60)
+            {
+                if (messageBusMessage.MessageData === null)
+                {
+                    throw new Error("Message data is null.");
+                }
+                
+                aWriter.write(messageBusMessage.MessageData, true);
+            }
+            
+            return aDynamicDataView.getArrayBuffer();
+        };
+        
+        this.deserialize = function(dataToDeserialize)
+        {
+            var aDynamicDataView = new DynamicDataView(dataToDeserialize);
+            var aReader = new EncoderDecoder(aDynamicDataView);
+            
+            var aMessageBusMessage = new MessageBusMessage();
+            aMessageBusMessage.Request = aReader.readByte();
+            aMessageBusMessage.Id = aReader.readPlainString(myStringEncoding, true);
+            
+            if (aMessageBusMessage.Request === 50 || aMessageBusMessage.Request === 60)
+            {
+                aMessageBusMessage.MessageData = aReader.read(true);
+            }
+            
+            return aMessageBusMessage;
+        };
+    }
+    
+    if (!messageBusOutputChannel)
+    {
+        throw new Error("Failed to create AuthenticatedDuplexOutputChannel because input parameter underlyingDuplexOutputChannel is null.");
+    }
+    
+    var mySerializer = (serializer) ? serializer : new MessageBusCustomSerializer();
+    var myChannelId = serviceId;
+    var myResponseReceiverId = (responseReceiverId) ? responseReceiverId : serviceId + "_" + getGuid();
+    
+    var myMessageBusOutputChannel = messageBusOutputChannel;
+    myMessageBusOutputChannel.onResponseMessageReceived = _onResponseMessageReceived;
+    myMessageBusOutputChannel.onConnectionOpened = _onConnectionOpened;
+    myMessageBusOutputChannel.onConnectionClosed = _onConnectionClosed;
+    
+    var myTracedObject = "MessageBusOutputChannel ";
+    
+    // Store the context of this class.
+    var mySelf = this;
+    
+    
+    this.onResponseMessageReceived = function(duplexChannelMessageEventArgs) {};
+    
+    this.onConnectionOpened = function(duplexChannelEventArgs) {};
+
+    this.onConnectionClosed = function(duplexChannelEventArgs) {};
+    
+    this.getChannelId = function()
+    {
+        return myChannelId;
+    };
+
+    this.getResponseReceiverId = function()
+    {
+        return myResponseReceiverId;
+    };
+    
+    this.openConnection = function()
+    {
+        if (this.isConnected())
+        {
+            throw new Error("Connection is already open.");
+        }
+
+        try
+        {
+            // Once the connection is open the code continues in _onConnectionOpened().
+            myMessageBusOutputChannel.openConnection();
+        }
+        catch (err)
+        {
+            logError(myTracedObject + "failed to open connection.", err);
+            closeConnection();
+            throw err;
+        }
+    };
+    
+    this.closeConnection = function()
+    {
+        myMessageBusOutputChannel.closeConnection();
+    };
+    
+    this.isConnected = function()
+    {
+        return myMessageBusOutputChannel.isConnected();
+    };
+    
+    this.sendMessage = function(message)
+    {
+        if (!this.isConnected())
+        {
+            var aMessage = myTracedObject + "failed to send the message because the output channel is not connected.";
+            logError(aMessage);
+            throw new Error(aMessage);
+        }
+
+        try
+        {
+            // Note: do not send the client id. It will be automatically assign in the message bus before forwarding the message to the service.
+            //       It is done like this due to security reasons. So that some client cannot pretend other client just by sending a different id.
+            var aMessage = new MessageBusMessage();
+            aMessage.Request = 50;
+            aMessage.Id = "";
+            aMessage.MessageData = message;
+            var aSerializedMessage = mySerializer.serialize(aMessage);
+            myMessageBusOutputChannel.sendMessage(aSerializedMessage);
+        }
+        catch (err)
+        {
+            var aMessage = myTracedObject + "failed to send a message.";
+            logError(aMessage, err);
+            throw new Error(aMessage);
+        }
+    };
+    
+    // Is called when messageBusOutputChannel opened the connection to the message bus.
+    // The method tells message bus which service shall be connected.
+    function _onConnectionOpened(duplexChannelEventArgs)
+    {
+        try
+        {
+            // Tell message bus which service shall be associated with this connection.
+            var aMessage = new MessageBusMessage();
+            aMessage.Request = 20;
+            aMessage.Id = myChannelId;
+            var aSerializedMessage = mySerializer.serialize(aMessage);
+            myMessageBusOutputChannel.sendMessage(aSerializedMessage);
+        }
+        catch (err)
+        {
+            logError(myTracedObject + "failed to open connection with message bus.", err);
+            throw err;
+        }
+    }
+    
+    function _onConnectionClosed(duplexChannelEventArgs)
+    {
+        mySelf.onConnectionClosed(duplexChannelEventArgs);
+    }
+    
+    function _onResponseMessageReceived(duplexChannelMessageEventArgs)
+    {
+        var aMessageBusMessage;
+        try
+        {
+            aMessageBusMessage = mySerializer.deserialize(duplexChannelMessageEventArgs.Message);
+        }
+        catch (err)
+        {
+            logError(myTracedObject + "failed to deserialize the message.", err);
+            return;
+        }
+        
+        // If message bus confirmed this client is connected to the desired service.
+        if (aMessageBusMessage.Request === 40)
+        {
+            // CONNECTION CONFIRMED.
+            var anEventArgs = new DuplexChannelEventArgs(mySelf.getChannelId(), mySelf.getResponseReceiverId());
+            mySelf.onConnectionOpened(anEventArgs);
+        }
+        else if (aMessageBusMessage.Request === 60)
+        {
+            var anEventArgs = new DuplexChannelMessageEventArgs(mySelf.getChannelId(), aMessageBusMessage.MessageData, mySelf.getResponseReceiverId());
+            mySelf.onResponseMessageReceived(anEventArgs);
+        }
+    }
+};
+
 /**
  * Event arguments used to for connection related events. (e.g. onConnectionOpened, onConnectionClosed)
  * @class

@@ -1,0 +1,111 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8" />
+
+    <title>WebSocketDuplexOutputChannel Example</title>
+
+    <script type="text/javascript" src="eneter-messaging-7.0.0.js"></script>
+    <script type="text/javascript">
+        // Get DIV where the response message will be displayed.
+        var anOutput = document.getElementById("output");
+
+        // Create websocket output channel for the communication with the message bus.
+        var anUnderlyingMessageBusOutputChannel = new WebSocketDuplexOutputChannel("ws://127.0.0.1:8045/Clients/", null);
+        
+        // Create message bus output channel for the communication with the service behind the message bus.
+        var aMessageBusOutputChannel = new MessageBusOutputChannel("CalculatorService", null, anUnderlyingMessageBusOutputChannel);
+        
+        // Create authenticated output channel so that the service behind the message bus
+        // can authenticate connected client.
+        var anOutputChannel = new AuthenticatedDuplexOutputChannel(aMessageBusOutputChannel, onGetLogin, onGetHandshakeResponse);
+
+        // Create MultiTypedMessageSender.
+        var aSender = new MultiTypedMessageSender();
+
+        // Subscribe to notifications.
+        aSender.onConnectionOpened = onConnectionOpened;
+        aSender.onConnectionClosed = onConnectionClosed;
+        
+        // Register message handler
+        aSender.registerResponseMessageReceiver(onResponseReceived_Double, "Double");
+
+        function onGetLogin(channelId, responseReceiverId)
+        {
+            var aLogin = document.getElementById("login").value;
+            return aLogin;
+        }
+        
+        function onGetHandshakeResponse(channelId, responseReceiverId, handshakeMessage)
+        {
+            var aPassword = document.getElementById("password").value;
+            return aPassword;
+        }
+
+        function MyRequestMessage(number1, number2) {
+            this.Number1 = number1;
+            this.Number2 = number2;
+        };
+
+
+        function onLogin() {
+            // Attach output channel and be able to send messages and receive responses.
+            aSender.attachDuplexOutputChannel(anOutputChannel);
+        };
+
+        function onLogout() {
+            // Detach output channel and stop listening to responses.
+            aSender.detachDuplexOutputChannel();
+        };
+
+        function sendMessage() {
+            //Text-box for the input.
+            var aMessage = new MyRequestMessage(10, 20);
+            aSender.sendRequestMessage(aMessage, aMessage.constructor.name);
+        };
+
+        function onConnectionOpened(duplexChannelEventArgs) {
+            var aMsg = "Connected: ChannelId='" + duplexChannelEventArgs.ChannelId + "' ResponseReceiverId='" + duplexChannelEventArgs.ResponseReceiverId + "'";
+            writeOnScreen(aMsg);
+        }
+
+        function onConnectionClosed(duplexChannelEventArgs) {
+            var aMsg = "Disconnected: ChannelId='" + duplexChannelEventArgs.ChannelId + "' ResponseReceiverId='" + duplexChannelEventArgs.ResponseReceiverId + "'";
+            writeOnScreen(aMsg);
+        }
+
+        function onResponseReceived_Double(typedResponseReceivedEventArgs) {
+            var aValue = typedResponseReceivedEventArgs.ResponseMessage;
+            writeOnScreen(aValue);
+        }
+
+        // Displays a text message on the screen.
+        function writeOnScreen(msg) {
+            var pre = document.createElement("p");
+            pre.style.wordWrap = "break-word";
+            pre.innerHTML = msg;
+            output.appendChild(pre);
+        }
+
+    </script>
+</head>
+<body>
+
+    <div>
+    	User Name:<br/>
+    	<input id="login" type="text" value="User123" /><br/>
+    	Password:<br/>
+    	<input id="password" type="text" value="123" /><br/>
+        <button type="button" onclick="onLogin()">Login</button><br/>
+        <button type="button" onclick="onLogout()">Logout</button>
+    </div>
+    <div>
+        <input id="input" type="text" value="Hello world" /><br/>
+        <button type="button" onclick="sendMessage()" >Send</button>
+    </div>
+    
+    <div id="output">
+    </div>
+
+</body>
+</html>
