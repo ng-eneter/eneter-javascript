@@ -285,9 +285,16 @@ function DuplexBrokerClient(serializer)
             logError("Failed to deserialize message from Broker.", err);
         }
 
-        // Raise the event.
-        var aBrokerMessageReceivedEventArgs = new BrokerMessageReceivedEventArgs(aMessageType, aMessageContent, anError);
-        mySelf.onBrokerMessageReceived(aBrokerMessageReceivedEventArgs);
+        try
+        {
+            // Raise the event.
+            var aBrokerMessageReceivedEventArgs = new BrokerMessageReceivedEventArgs(aMessageType, aMessageContent, anError);
+            mySelf.onBrokerMessageReceived(aBrokerMessageReceivedEventArgs);
+        }
+        catch (err)
+        {
+            logError("Detected a failure in the event handler.", err);
+        }
     };
 };
 DuplexBrokerClient.prototype = new AttachableDuplexOutputChannelBase();
@@ -522,8 +529,15 @@ function MultiTypedMessageSender()
         var aHandler = myMessageHandlers.get(aMultiTypedMessage.TypeName);
         if (aHandler !== null)
         {
-            var aResponseReceivedEventArgs = new TypedResponseReceivedEventArgs(aDeserializedMessageData, anError);
-            aHandler(aResponseReceivedEventArgs);
+            try
+            {
+                var aResponseReceivedEventArgs = new TypedResponseReceivedEventArgs(aDeserializedMessageData, anError);
+                aHandler(aResponseReceivedEventArgs);
+            }
+            catch (err)
+            {
+                logError("Detected a failure in the message handler.", err);
+            }
         }
     }
 };
@@ -916,6 +930,7 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
     
     function _onConnectionOpened(duplexChannelEventArgs)
     {
+        var aCloseConnectionFlag = false;
         var aLoginMessage;
         try
         {
@@ -924,7 +939,7 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
         catch (err)
         {
             logError(myTracedObject + "failed to get the login message.", err);
-            throw err;
+            aCloseConnectionFlag = true;
         }
         
         try
@@ -934,20 +949,40 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
         catch (err)
         {
             logError(myTracedObject + "failed to send the login message.", err);
-            throw err;
+            aCloseConnectionFlag = true;
+        }
+        
+        if (aCloseConnectionFlag)
+        {
+            myUnderlyingOutputChannel.closeConnection();
         }
     }
     
     function _onConnectionClosed(duplexChannelEventArgs)
     {
-        mySelf.onConnectionClosed(duplexChannelEventArgs);
+        try
+        {
+            mySelf.onConnectionClosed(duplexChannelEventArgs);
+        }
+        catch (err)
+        {
+            logError("Detected a failure in the event handler.", err);
+        }
     }
     
     function _onResponseMessageReceived(duplexChannelMessageEventArgs)
     {
         if (myIsConnectionAcknowledged)
         {
-            mySelf.onResponseMessageReceived(duplexChannelMessageEventArgs);
+            try
+            {
+                mySelf.onResponseMessageReceived(duplexChannelMessageEventArgs);
+            }
+            catch (err)
+            {
+                logError("Detected a failure in the event handler.", err);
+            }
+            
             return;
         }
         
@@ -986,9 +1021,7 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
                 catch (err)
                 {
                     myIsHandshakeResponseSent = false;
-
                     logError(myTracedObject + "failed to send the handshake response message. The connection will be closed.", err);
-
                     aCloseConnectionFlag = true;
                 }
             }
@@ -1006,8 +1039,16 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
             else
             {
                 myIsConnectionAcknowledged = true;
-                var anEventArgs = new DuplexChannelEventArgs(mySelf.getChannelId(), mySelf.getResponseReceiverId());
-                onConnectionOpened(anEventArgs);
+                
+                try
+                {
+                    var anEventArgs = new DuplexChannelEventArgs(mySelf.getChannelId(), mySelf.getResponseReceiverId());
+                    mySelf.onConnectionOpened(anEventArgs);
+                }
+                catch (err)
+                {
+                    logError("Detected a failure in the event handler.", err);
+                }
             }
         }
         
@@ -1193,7 +1234,14 @@ function MessageBusOutputChannel(serviceId, responseReceiverId, messageBusOutput
     
     function _onConnectionClosed(duplexChannelEventArgs)
     {
-        mySelf.onConnectionClosed(duplexChannelEventArgs);
+        try
+        {
+            mySelf.onConnectionClosed(duplexChannelEventArgs);
+        }
+        catch (err)
+        {
+            logError("Detected a failure in the event handler.", err);
+        }
     }
     
     function _onResponseMessageReceived(duplexChannelMessageEventArgs)
@@ -1213,13 +1261,27 @@ function MessageBusOutputChannel(serviceId, responseReceiverId, messageBusOutput
         if (aMessageBusMessage.Request === 40)
         {
             // CONNECTION CONFIRMED.
-            var anEventArgs = new DuplexChannelEventArgs(mySelf.getChannelId(), mySelf.getResponseReceiverId());
-            mySelf.onConnectionOpened(anEventArgs);
+            try
+            {
+                var anEventArgs = new DuplexChannelEventArgs(mySelf.getChannelId(), mySelf.getResponseReceiverId());
+                mySelf.onConnectionOpened(anEventArgs);
+            }
+            catch (err)
+            {
+                logError("Detected a failure in the event handler.", err);
+            }
         }
         else if (aMessageBusMessage.Request === 60)
         {
-            var anEventArgs = new DuplexChannelMessageEventArgs(mySelf.getChannelId(), aMessageBusMessage.MessageData, mySelf.getResponseReceiverId());
-            mySelf.onResponseMessageReceived(anEventArgs);
+            try
+            {
+                var anEventArgs = new DuplexChannelMessageEventArgs(mySelf.getChannelId(), aMessageBusMessage.MessageData, mySelf.getResponseReceiverId());
+                mySelf.onResponseMessageReceived(anEventArgs);
+            }
+            catch (err)
+            {
+                logError("Detected a failure in the event handler.", err);
+            }
         }
     }
 };
@@ -1400,9 +1462,16 @@ function WebSocketDuplexOutputChannel(webSocketUri, responseReceiverId, protocol
                     aProtocolMessage = new ProtocolMessage("Unknonw", "", null);
                 }
 
-                // Notify the message was received.
-                var aDuplexChannelMessageEventArgs = new DuplexChannelMessageEventArgs(myChannelId, aProtocolMessage.Message, myResponseReceiverId);
-                aSelf.onResponseMessageReceived(aDuplexChannelMessageEventArgs);
+                try
+                {
+                    // Notify the message was received.
+                    var aDuplexChannelMessageEventArgs = new DuplexChannelMessageEventArgs(myChannelId, aProtocolMessage.Message, myResponseReceiverId);
+                    aSelf.onResponseMessageReceived(aDuplexChannelMessageEventArgs);
+                }
+                catch (err)
+                {
+                    logError(myTracedObject + "detected a failure in the event handler.", err);
+                }
             };
 
             myWebSocket.onerror = function(evt)
@@ -1437,9 +1506,16 @@ function WebSocketDuplexOutputChannel(webSocketUri, responseReceiverId, protocol
 
             myWebSocket = null;
             
-            // Notify the connection is closed.
-            var aDuplexChannelEventArgs = new DuplexChannelEventArgs(myChannelId, myResponseReceiverId);
-            this.onConnectionClosed(aDuplexChannelEventArgs);
+            try
+            {
+                // Notify the connection is closed.
+                var aDuplexChannelEventArgs = new DuplexChannelEventArgs(myChannelId, myResponseReceiverId);
+                this.onConnectionClosed(aDuplexChannelEventArgs);
+            }
+            catch (err)
+            {
+                logError(myTracedObject + "detected a failure in the event handler.", err);
+            }
         }
     };
 
