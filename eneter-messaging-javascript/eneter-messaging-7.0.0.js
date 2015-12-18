@@ -37,9 +37,9 @@ function BrokerMessageReceivedEventArgs(messageTypeId, message, receivingError)
 }
 
 /**
- * Broker client that can publish and subscribe messages in the broker.
+ * Broker client which can publish and subscribe messages in the broker.
  * @param {JsonSerializer} [serializer = null] serializer used to serialize/deserialize messages for/from DuplexBroker.
- * If null then {@link DuplexBrokerClient~BrokerCustomSerializer} is used by default. It is the high performance  serializer specifically designed
+ * If null then {@link DuplexBrokerClient~BrokerCustomSerializer} is used by default. It is the high performance serializer specifically designed
  * just for the interaction with Broker. {@link DuplexBrokerClient~BrokerCustomSerializer} is not part of API.
  * @class
  * @augments AttachableDuplexOutputChannelBase
@@ -178,17 +178,17 @@ function DuplexBrokerClient(serializer)
     var mySelf = this;
     
     /**
-     * The event is invoked when the observed event is received from the broker.
+     * The event is invoked when a message is received from the broker.
      * @param {BrokerMessageReceivedEventArgs} brokerMessageReceivedEventArgs
      */
     this.onBrokerMessageReceived = function(brokerMessageReceivedEventArgs) {};
     
     /**
      * Publishes the event via the broker.<br/>
-     * It means sends the message to the broker. When the broker receives the message it will notified all subscribers
-     * which are subscribed for this message.
-     * @param {String} eventId identifies the event
-     * @param {String} serializedMessage message content. If the message is not a primitive type or string then the input parameter expects the message is already serialized!
+     * It sends the message to the broker. When the broker receives the message it will then notify all subscribers
+     * which are subscribed for the specified eventId.
+     * @param {String} eventId identifies the type of the event.
+     * @param {String} serializedMessage serialized event data which shall be published via Broker.
      */
     this.sendMessage = function(eventId, serializedMessage)
     {
@@ -301,11 +301,11 @@ DuplexBrokerClient.prototype = new AttachableDuplexOutputChannelBase();
 DuplexBrokerClient.constructor = DuplexBrokerClient;
 
 /**
- * Sends and receives messages of multiple types.
+ * Sends and receives messages of multiple types.<br/>
  * Messages are serialized/deserialized using Json.
  * 
  * @class
- * 
+ *
  * @example
  * // Declare response message.
  * function MyResponseMessage1 {
@@ -443,23 +443,28 @@ function MultiTypedMessageSender()
      */
     this.registerResponseMessageReceiver = function(handler, clazz)
     {
-        if (handler === null)
+        if (!handler)
         {
             var anError = "Failed to register handler for message " + clazz + " because the input parameter handler is null.";
             logError(anError);
             throw new Error(anError);
         }
-        
-        var aNetTypeName = clazz;
-        var aMessageHandler = myMessageHandlers.get(aNetTypeName);
-        if (aMessageHandler !== null)
+		if (!clazz)
         {
-            var anError = "Failed to register handler for message " + aNetTypeName + " because the handler for such class name is already registered.";
+            var anError = "Failed to register handler because the input parameter clazz is null.";
             logError(anError);
             throw new Error(anError);
         }
         
-        myMessageHandlers.put(aNetTypeName, handler);
+        var aMessageHandler = myMessageHandlers.get(clazz);
+        if (aMessageHandler !== null)
+        {
+            var anError = "Failed to register handler for message " + clazz + " because the handler for such class name is already registered.";
+            logError(anError);
+            throw new Error(anError);
+        }
+        
+        myMessageHandlers.put(clazz, handler);
     }
     
     /**
@@ -468,13 +473,12 @@ function MultiTypedMessageSender()
      */
     this.unregisterResponseMessageReceiver = function(clazz)
     {
-        var aNetTypeName = clazz;
         myMessageHandlers.remove(clazz);
     }
     
     /**
      * Returns array of types which have registered handlers.
-     * @Returns {String[]} type names which are registered for receiving.
+     * @returns {String[]} type names which are registered for receiving.
      */
     this.getRegisteredResponseMessageTypes = function()
     {
@@ -551,7 +555,7 @@ function MultiTypedMessageSender()
 function TypedResponseReceivedEventArgs(responseMessage, receivingError)
 {
     /**
-     * Returns object of received message. (it is already deserialized message)
+     * Returns deserialized message object.
      */
     this.ResponseMessage = responseMessage;
 
@@ -562,9 +566,8 @@ function TypedResponseReceivedEventArgs(responseMessage, receivingError)
 };
 
 /**
- * Sends request messages and receives response messages.
- * Messages do not have to be String or byte[] but they can be be data structures (classes).
- * Messages are serialized/deserialized using Json.
+ * Sends request messages and receives response messages of a specific type.<br/>
+ * It uses JsonSerializer to serialize/deserialize messages.
  * 
  * @class
  * @augments AttachableDuplexOutputChannelBase
@@ -693,9 +696,8 @@ DuplexTypedMessageSender.prototype = new AttachableDuplexOutputChannelBase();
 DuplexTypedMessageSender.constructor = DuplexTypedMessageSender;
 
 /**
- * JSON serializer for Eneter.
- * This serializer is used by {@link DuplexTypedMessageSender} and it is the default
- * serializer for {@link DuplexBrokerClient}.
+ * JSON serializer for Eneter.<br/>
+ * This serializer is used by {@link DuplexTypedMessageSender} and {@link MultiTypedMessageSender} by default.
  * @class
  */
 function JsonSerializer()
@@ -724,8 +726,8 @@ function JsonSerializer()
 };
 
 /**
- * Base class for all communication components that need to attach duplex output channel.
- * This is meant to be abstract class. Therefore do not use instantiate it directly.
+ * Base class for communication components which need a capability to attach duplex output channel.
+ * This is meant to be abstract class. Therefore do not instantiate it directly.
  * @class
  * @abstract
  */
@@ -758,7 +760,9 @@ function AttachableDuplexOutputChannelBase()
 
     /**
      * Attaches the duplex output channel and opens the connection for sending request messages
-     * and receiving response messages.
+     * and receiving response messages.<br/>
+	 * Please notice when the call returns from this method the connection does not have to be open yet.
+	 * It can be still in the state opening. Use onConnectionOpened eent to detect when the connetion is open.
      * @param {WebSocketDuplexOutputChannel} outputChannel
      * @throws Throws an error if attaching fails.
      */
@@ -820,7 +824,9 @@ function AttachableDuplexOutputChannelBase()
     };
 
     /**
-     * Returns true if the reference to the duplex output channel is stored.
+     * Returns true if the duplex output channel is attached.<br/>
+	 * Please notice when the channel is attached it does not have to be connected.
+	 * E.g. once the output channel was attached and the connection was open and then the connection was broken or closed by input channel.
      */
     this.isDuplexOutputChannelAttached = function()
     {
@@ -837,7 +843,7 @@ function AttachableDuplexOutputChannelBase()
 };
 
 /**
- * Output channel providing authentication mechanism.<br/>
+ * Output channel which provides the authentication mechanism.<br/>
  * <br/>
  * Here is how the authentication procedure works:
  * <ol>
@@ -856,6 +862,46 @@ function AttachableDuplexOutputChannelBase()
  * @param {AuthenticatedDuplexOutputChannel~getLoginMessageCallback} getLoginMessageCallback callback method returning login message.
  * @param {AuthenticatedDuplexOutputChannel~getHandshakeResponseMessageCallback} getHandshakeResponseMessageCallback callback method returning response message for the handshake message.
  * 
+ * @example
+ * // Create websocket output channel.
+ * var anUnderlyingOutputChannel = new WebSocketDuplexOutputChannel("ws://127.0.0.1:8033/Service/", null);
+ * 
+ * // Create authenticated output channel based on websocket output channel.
+ * var anOutputChannel = new AuthenticatedDuplexOutputChannel(anUnderlyingOutputChannel, onGetLogin, onGetHandshakeResponse);
+ * 
+ * // Create MultiTypedMessageSender.
+ * var aSender = new MultiTypedMessageSender();
+ *
+ * // Register message handler
+ * aSender.registerResponseMessageReceiver(onMyMessageTypeResponseReceived, "MyMessageType");
+ * 
+ *
+ * ...
+ * // Callback method called from AuthenticatedDuplexOutputChannel to get the login.
+ * function onGetLogin(channelId, responseReceiverId) {
+ *     var aLogin = document.getElementById("login").value;
+ *     return aLogin;
+ * }
+ * 
+ * // Callback method called from AuthenticatedDuplexOutputChannel to get the password.
+ * function onGetHandshakeResponse(channelId, responseReceiverId, handshakeMessage) {
+ *     var aPassword = document.getElementById("password").value;
+ *     return aPassword;
+ * }
+ *
+ *
+ * // Method called when login is pressed.
+ * function onLogin() {
+ *     // Attach output channel and be able to send messages and receive responses.
+ *     // Note: the attached authenticated output channel ensures the authentication sequence is performed.
+ *     aSender.attachDuplexOutputChannel(anOutputChannel);
+ * };
+ *
+ * // Method called when logout is pressed.
+ * function onLogout() {
+ *     // Detach output channel and stop listening to responses.
+ *     aSender.detachDuplexOutputChannel();
+ * };
  */
 function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLoginMessageCallback, getHandshakeResponseMessageCallback)
 {
@@ -907,22 +953,53 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
     var mySelf = this;
     
     
+	/**
+     * The event is invoked when a response message was received.
+     * @param {DuplexChannelMessageEventArgs} duplexChannelMessageEventArgs
+     */
     this.onResponseMessageReceived = function(duplexChannelMessageEventArgs) {};
     
+	/**
+     * The event is invoked when the connection with the duplex input channel was opened.
+     * @param {DuplexChannelEventArgs} duplexChannelEventArgs
+	 * @example
+	 * // Set your handler to receive open connection notification. 
+     * aSender.onConnectionOpened = yourOnConnectionOpened;
+     */
     this.onConnectionOpened = function(duplexChannelEventArgs) {};
 
+	/**
+     * The event is invoked when the connection with the duplex input channel was closed.
+     * @param {DuplexChannelEventArgs} duplexChannelEventArgs
+	 * @example
+	 * // Set your handler to receive close connection notification.
+     * aSender.onConnectionClosed = yourOnConnectionClosed;
+     */
     this.onConnectionClosed = function(duplexChannelEventArgs) {};
     
+	/**
+     * Returns the channel id. It represents the service address.
+     * @returns {String}
+     */
     this.getChannelId = function()
     {
         return myUnderlyingOutputChannel.getChannelId();
     };
 
+	/**
+     * Returns the response receiver id. It uniquely represents this client at the service.
+     * @returns {String}
+     */
     this.getResponseReceiverId = function()
     {
         return myUnderlyingOutputChannel.getResponseReceiverId();
     };
     
+	/**
+     * Opens connection with the duplex input channel.<br/>
+	 * When opening it performes the authentication sequence.
+     * @throws Throws error if connection could not be open.
+     */
     this.openConnection = function()
     {
         if (this.isConnected())
@@ -946,16 +1023,28 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
         }
     };
     
+	/**
+     * Closes connection with the duplex input channel.
+     */
     this.closeConnection = function()
     {
         myUnderlyingOutputChannel.closeConnection();
     };
     
+	/**
+     * Returns true if the connection with the duplex input channel is open.
+     * @returns {Boolean}
+     */
     this.isConnected = function()
     {
         return myUnderlyingOutputChannel.isConnected();
     };
     
+	/**
+     * Sends the message to the duplex input channel.
+     * @param {String | ArrayBuffer} message message to be sent
+     * @throws Throws error if sending fails.
+     */
     this.sendMessage = function(message)
     {
         if (!this.isConnected())
@@ -1099,6 +1188,47 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
     }
 };
 
+/**
+ * Output channel which provides the connection via the message bus.<br/>
+ * It uses the underlying messageBusOutputChannel to open connection to the message bus and then it asks the message bus to open
+ * the connection with a specified service.
+ * @class
+ * @param {String} serviceId id which specifies the address of the service within the message bus.
+ * @param {String} [responseReceiverId = null] uniquely represents the connection with the service behind the message bus.
+ *   The id is not sent to the service but is itendend for the client to recognize the connection.
+ *   If null then responsereceiverId is generated automatically.
+ * @param {WebSocketDuplexOutputChannel | AuthenticatedDuplexOutputChannel} messageBusOutputChannel underlaying output channel which
+ *   connects the message bus.
+ * @param {serializer} [serializer = null] serializer responsible to serialize/deserialize the communication with the message bus.
+ *   If null then the default MessageBusCustomSerializer is used.
+ *
+ * @example
+ * // Create websocket output channel for the communication with the message bus.
+ * // ws://127.0.0.1:8045/Clients/ is the address where the message listens to requests from clients.
+ * var anUnderlyingMessageBusOutputChannel = new WebSocketDuplexOutputChannel("ws://127.0.0.1:8045/Clients/", null);
+ * 
+ * // Create message bus output channel which will ensure communication with the specified service behind the message bus.
+ * // The service which is requested from the message bus is called CalculatorService.
+ * var aMessageBusOutputChannel = new MessageBusOutputChannel("CalculatorService", null, anUnderlyingMessageBusOutputChannel);
+ * 
+ * // Create MultiTypedMessageSender.
+ * var aSender = new MultiTypedMessageSender();
+ * 
+ * // Register message handler
+ * aSender.registerResponseMessageReceiver(onMyMessageTypeResponseReceived, "MyMessageType");
+ * 
+ * // When 'Open Connection' button is pressed.
+ * function onOpenConnection() {
+ *     // Attach output channel and be able to send messages and receive responses to/from the service behind the message bus.
+ *     aSender.attachDuplexOutputChannel(aMessageBusOutputChannel);
+ * }
+ *
+ * // When 'Close Connection' button is pressed.
+ * function onCloseConnection() {
+ *     // Detach output channel and stop listening to responses.
+ *     aSender.detachDuplexOutputChannel();
+ * }
+*/
 function MessageBusOutputChannel(serviceId, responseReceiverId, messageBusOutputChannel, serializer)
 {
     // Message data structure used for the communication with MessageBus.
@@ -1177,23 +1307,53 @@ function MessageBusOutputChannel(serviceId, responseReceiverId, messageBusOutput
     // Store the context of this class.
     var mySelf = this;
     
-    
+    /**
+     * The event is invoked when a response message was received.
+     * @param {DuplexChannelMessageEventArgs} duplexChannelMessageEventArgs
+     */
     this.onResponseMessageReceived = function(duplexChannelMessageEventArgs) {};
     
+	/**
+     * The event is invoked when the connection with the duplex input channel was opened.
+     * @param {DuplexChannelEventArgs} duplexChannelEventArgs
+	 * @example
+	 * // Set your handler to receive open connection notification. 
+     * aSender.onConnectionOpened = yourOnConnectionOpened;
+     */
     this.onConnectionOpened = function(duplexChannelEventArgs) {};
 
+	/**
+     * The event is invoked when the connection with the duplex input channel was closed.
+     * @param {DuplexChannelEventArgs} duplexChannelEventArgs
+	 * @example
+	 * // Set your handler to receive close connection notification.
+     * aSender.onConnectionClosed = yourOnConnectionClosed;
+     */
     this.onConnectionClosed = function(duplexChannelEventArgs) {};
     
+	/**
+     * Returns the channel id. It represents the service address.
+     * @returns {String}
+     */
     this.getChannelId = function()
     {
         return myChannelId;
     };
 
+	/**
+     * Returns the response receiver id. It uniquely represents this client at the service.
+     * @returns {String}
+     */
     this.getResponseReceiverId = function()
     {
         return myResponseReceiverId;
     };
     
+	/**
+     * Opens connection with the duplex input channel.<br/>
+	 * The opening the connection contains the request to the message bus to get connected to the specified service.
+     * @throws Throws error if connection could not be open.
+     */
     this.openConnection = function()
     {
         if (this.isConnected())
@@ -1214,16 +1374,28 @@ function MessageBusOutputChannel(serviceId, responseReceiverId, messageBusOutput
         }
     };
     
+	/**
+     * Closes connection with the duplex input channel.
+     */
     this.closeConnection = function()
     {
         myMessageBusOutputChannel.closeConnection();
     };
     
+	/**
+     * Returns true if the connection with the duplex input channel is open.
+     * @returns {Boolean}
+     */
     this.isConnected = function()
     {
         return myMessageBusOutputChannel.isConnected();
     };
     
+	/**
+     * Sends the message to the duplex input channel.
+     * @param {String | ArrayBuffer} message message to be sent
+     * @throws Throws error if sending fails.
+     */
     this.sendMessage = function(message)
     {
         if (!this.isConnected())
@@ -1235,7 +1407,7 @@ function MessageBusOutputChannel(serviceId, responseReceiverId, messageBusOutput
 
         try
         {
-            // Note: do not send the client id. It will be automatically assign in the message bus before forwarding the message to the service.
+            // Note: do not send the response receiver id. It will be automatically assign in the message bus before forwarding the message to the service.
             //       It is done like this due to security reasons. So that some client cannot pretend other client just by sending a different id.
             var aMessage = new MessageBusMessage();
             aMessage.Request = 50;
@@ -2485,5 +2657,3 @@ function logError(message, exception)
     
     console.error(message, anExceptionMessage);
 };
-
-

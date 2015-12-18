@@ -18,17 +18,23 @@ Eneter for Javascript provides client functionality allowing to implement the co
 and a service implemented e.g. in .NET or Java.<br/>
 Following communication scenarios are supported:
 
-1. **Request-Response** communication.
+1. **Request-Response Communication**<br/>
 JavaScript client can send request messages to the service and then receive one or more response messages.
 > {@link MultiTypedMessageSender}<br/>
 > {@link DuplexTypedMessageSender}<br/>
 > {@link WebSocketDuplexOutputChannel}<br/>
 _Example:_ {@link http://eneter.blogspot.de/2014/05/html5-request-response-communication.html HTML5: Request-Response Communication Using WebSockets}
 
-2. **Publish-Subscribe** communication.
+2. **Publish-Subscribe Communication**<br/>
 JavaScript client can subscribe to desired events and then be notified in "real-time". It means when a desired
 event occurs the message is immediately sent directly to the client (no polling and no long-polling techniques).
 > {@link DuplexBrokerClient}<br/>
 _Example:_ {@link http://eneter.blogspot.de/2014/05/html5-real-time-push-notifications-from.html HTML5: Real-Time Push Notifications from .NET Application}
 
-Eneter for JavaScript communicates using the WebSocket protocol and serializes using the JSON serializer.
+3. **Authenticated Communication**<br/>
+Javascript client can create authenticated connection. It allows a common authentication via login and password as well as a custom authentication sequence.
+> {@link AuthenticatedDuplexOutputChannel}
+
+4. **Service behind Message Bus**<br/>
+Javascript client can communicate with a service which is published via a message bus. It connects the message bus and requests to connect a specified service.
+> {@link MessageBusOutputChannel}
