@@ -4,7 +4,7 @@ Eneter Messaging Framework is a lightweight cross-platform framework for the int
 Using the framework you can connect applications across following platforms:
 <ul>
 	<li>Java 6 (or later)</li>
-	<li>Android 2.1 (or later)</li>
+	<li>Android 2.3.3 (or later)</li>
 	<li>Javascript</li>
 	<li>.NET 3.5, 4.0, 4.5</li>
 	<li>Windows Phone 7.0, 7.1, 8.0, 8.1</li>
