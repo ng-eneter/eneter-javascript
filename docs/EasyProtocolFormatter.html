@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Class: EasyProtocolFormatter</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Class: EasyProtocolFormatter</h1>
+
+    
+
+
+
+<section>
+
+<header>
+    <h2>
+    EasyProtocolFormatter
+    </h2>
+    
+</header>
+
+<article>
+    <div class="container-overview">
+    
+
+    
+        
+<dt>
+    <h4 class="name" id="EasyProtocolFormatter"><span class="type-signature"></span>new EasyProtocolFormatter<span class="signature">(isLittleEndian<span class="signature-attributes">opt</span>)</span><span class="type-signature"></span></h4>
+
+    
+</dt>
+<dd>
+
+    
+    <div class="description">
+        Simple and very fast encoding/decoding.The simplicity of this formatting provides high performance and easy portability to various platforms.However this formatting cannot be used when recovery of the broken connection is needed.<br/><br/><b>Encoding of open connection message:</b><br/>n.a. - the open connection message is not used. The connection is considered open when the socket is open.<br/><br/><b>Encoding of close connection message:</b><br/>n.a. - the close connection message is not used. The connection is considered closed then the socket is closed.<br/><br/><b>Encoding of data message:</b><br/>1 byte - type of data: 10 string in UTF8, 40 bytes<br/>4 bytes - length: 32 bit integer indicating the size (in bytes) of message data.<br/>x bytes - message data<br/>
+    </div>
+    
+
+    
+
+    
+
+    
+        <h5>Parameters:</h5>
+        
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>isLittleEndian</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Boolean</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    true
+                
+                </td>
+            
+
+            <td class="description last">Indicates if size of data is encoded in little endian or big endian.The default value is true - the little endian is used.</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+    
+
+    
+<dl class="details">
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="eneter-messaging-7.0.0.js.html">eneter-messaging-7.0.0.js</a>, <a href="eneter-messaging-7.0.0.js.html#line2070">line 2070</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+        <h5>Example</h5>
+        
+    <pre class="prettyprint"><code>// Create EasyProtocolFormatter.// Note: Be sure the service side uses EasyProtocolFormatter too.//       Otherwise it will not work because they will not understand each other!EasyProtocolFormatter aProtocolFormatter = new EasyProtocolFormatter();// Create the duplex output channel which uses the specified protocol formatter.var anOutputChannel = new WebSocketDuplexOutputChannel("ws://127.0.0.1:8077/MyService/", null, aProtocolFormatter);// Subscribe for receving messages.anOutputChannel.onResponseMessageReceived = onResponseMessageReceived;// Open connection.anOutputChannel.openConnection();...// Send a message.// Note: the message can be String or ArrayBuffer.anOutputChannel.sendMessage("Hello World.");...// Close connection when not needed.anOutputChannel.closeConnection();...// Your event handler to process received response messages.function onResponseMessageReceived(duplexChannelMessageEventArgs) {    var aMessage = duplexChannelMessageEventArgs.Message;        ...}</code></pre>
+
+    
+</dd>
+
+    
+    </div>
+
+    
+
+    
+
+    
+
+    
+
+     
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Methods</h3>
+
+        <dl>
+            
+<dt>
+    <h4 class="name" id="decodeMessage"><span class="type-signature"></span>decodeMessage<span class="signature">(arrayBufferMessage)</span><span class="type-signature"> &rarr; {<a href="ProtocolMessage.html">ProtocolMessage</a>}</span></h4>
+
+    
+</dt>
+<dd>
+
+    
+    <div class="description">
+        Decodes the incoming message.
+    </div>
+    
+
+    
+
+    
+
+    
+        <h5>Parameters:</h5>
+        
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>arrayBufferMessage</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">ArrayBuffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">encoded message data.</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+    
+
+    
+<dl class="details">
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="eneter-messaging-7.0.0.js.html">eneter-messaging-7.0.0.js</a>, <a href="eneter-messaging-7.0.0.js.html#line2114">line 2114</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <h5>Returns:</h5>
+    
+            
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type"><a href="ProtocolMessage.html">ProtocolMessage</a></span>
+
+
+    </dd>
+</dl>
+
+        
+
+    
+</dd>
+
+        
+            
+<dt>
+    <h4 class="name" id="encodeOpenConnectionMessage"><span class="type-signature"></span>encodeOpenConnectionMessage<span class="signature">()</span><span class="type-signature"></span></h4>
+
+    
+</dt>
+<dd>
+
+    
+    <div class="description">
+        Returns null.
+    </div>
+    
+
+    
+
+    
+
+    
+
+    
+<dl class="details">
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="eneter-messaging-7.0.0.js.html">eneter-messaging-7.0.0.js</a>, <a href="eneter-messaging-7.0.0.js.html#line2077">line 2077</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+</dd>
+
+        
+            
+<dt>
+    <h4 class="name" id="encodeRequestMessage"><span class="type-signature"></span>encodeRequestMessage<span class="signature">(responseReceiverId, messageData)</span><span class="type-signature"></span></h4>
+
+    
+</dt>
+<dd>
+
+    
+    <div class="description">
+        Encodes the message.
+    </div>
+    
+
+    
+
+    
+
+    
+        <h5>Parameters:</h5>
+        
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>responseReceiverId</code></td>
+            
+
+            <td class="type">
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">id of the client that wants to send the message. This parameter is not used.</td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>messageData</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">String</span>
+|
+
+<span class="param-type">ArrayBuffer</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last">message which shall be sent.</td>
+        </tr>
+
+    
+    </tbody>
+</table>
+    
+
+    
+<dl class="details">
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="eneter-messaging-7.0.0.js.html">eneter-messaging-7.0.0.js</a>, <a href="eneter-messaging-7.0.0.js.html#line2093">line 2093</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+</dd>
+
+        </dl>
+    
+
+    
+
+    
+</article>
+
+</section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Index</a></h2><h3>Classes</h3><ul><li><a href="AttachableDuplexOutputChannelBase.html">AttachableDuplexOutputChannelBase</a></li><li><a href="AuthenticatedDuplexOutputChannel.html">AuthenticatedDuplexOutputChannel</a></li><li><a href="BrokerMessageReceivedEventArgs.html">BrokerMessageReceivedEventArgs</a></li><li><a href="DuplexBrokerClient.html">DuplexBrokerClient</a></li><li><a href="DuplexChannelEventArgs.html">DuplexChannelEventArgs</a></li><li><a href="DuplexChannelMessageEventArgs.html">DuplexChannelMessageEventArgs</a></li><li><a href="DuplexTypedMessageSender.html">DuplexTypedMessageSender</a></li><li><a href="EasyProtocolFormatter.html">EasyProtocolFormatter</a></li><li><a href="EneterProtocolFormatter.html">EneterProtocolFormatter</a></li><li><a href="JsonSerializer.html">JsonSerializer</a></li><li><a href="MessageBusOutputChannel.html">MessageBusOutputChannel</a></li><li><a href="MultiTypedMessageSender.html">MultiTypedMessageSender</a></li><li><a href="ProtocolMessage.html">ProtocolMessage</a></li><li><a href="TypedResponseReceivedEventArgs.html">TypedResponseReceivedEventArgs</a></li><li><a href="WebSocketDuplexOutputChannel.html">WebSocketDuplexOutputChannel</a></li></ul>
+</nav>
+
+<br clear="both">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.3.0-dev</a> on Mon Jan 04 2016 16:20:15 GMT+0100 (CET)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
