@@ -406,9 +406,9 @@ function MultiTypedMessageSender()
      * @param {WebSocketDuplexOutputChannel} outputChannel
      * @throws Throws an error if attaching fails.
      */
-    this.attachDuplexOutputChannel = function(outputChannel)
+    this.attachDuplexOutputChannel = async function(outputChannel)
     {
-        mySender.attachDuplexOutputChannel(outputChannel);
+        await mySender.attachDuplexOutputChannel(outputChannel);
     };
 
     /**
@@ -766,7 +766,7 @@ function AttachableDuplexOutputChannelBase()
      * @param {WebSocketDuplexOutputChannel} outputChannel
      * @throws Throws an error if attaching fails.
      */
-    this.attachDuplexOutputChannel = function(outputChannel)
+    this.attachDuplexOutputChannel = async function(outputChannel)
     {
         try
         {
@@ -790,7 +790,7 @@ function AttachableDuplexOutputChannelBase()
             myOutputChannel.onConnectionClosed = this.onConnectionClosed;
             myOutputChannel.onResponseMessageReceived = this._onResponseMessageReceived;
 
-            myOutputChannel.openConnection();
+            await myOutputChannel.openConnection();
         }
         catch (err)
         {
@@ -1000,7 +1000,7 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
 	 * When opening it performes the authentication sequence.
      * @throws Throws error if connection could not be open.
      */
-    this.openConnection = function()
+    this.openConnection = async function()
     {
         if (this.isConnected())
         {
@@ -1013,7 +1013,7 @@ function AuthenticatedDuplexOutputChannel(underlyingDuplexOutputChannel, getLogi
             myIsConnectionAcknowledged = false;
 
             // Once the connection is open the code continues in _onConnectionOpened().
-            myUnderlyingOutputChannel.openConnection();
+            await myUnderlyingOutputChannel.openConnection();
         }
         catch (err)
         {
@@ -1354,20 +1354,17 @@ function MessageBusOutputChannel(serviceId, responseReceiverId, messageBusOutput
 	 * The opening the connection contains the request to the message bus to get connected to the specified service.
      * @throws Throws error if connection could not be open.
      */
-    this.openConnection = function()
+    this.openConnection = async function()
     {
-        if (this.isConnected())
-        {
+        if (this.isConnected()) {
             throw new Error("Connection is already open.");
         }
 
-        try
-        {
+        try {
             // Once the connection is open the code continues in _onConnectionOpened().
-            myMessageBusOutputChannel.openConnection();
+            await myMessageBusOutputChannel.openConnection();
         }
-        catch (err)
-        {
+        catch (err) {
             logError(myTracedObject + "failed to open connection.", err);
             closeConnection();
             throw err;
@@ -1627,78 +1624,74 @@ function WebSocketDuplexOutputChannel(webSocketUri, responseReceiverId, protocol
      * Opens connection with the duplex input channel.
      * @throws Throws error if connection could not be open.
      */
-    this.openConnection = function()
-    {
-        if (this.isConnected())
-        {
-            throw new Error("Connection is already open.");
-        }
+    this.openConnection = function () {
 
-        try
-        {
-            myWebSocket = new WebSocket(myChannelId);
+        var aSelf = this;
 
-            // We want to use ArrayBuffer for data transfer.
-            myWebSocket.binaryType = "arraybuffer";
+        return new Promise(function (resolve, reject) {
 
-            // Subscribe in WebSocket to receive notifications.
-            var aSelf = this;
-            myWebSocket.onopen = function(evt)
-            {
-                // Ask duplex input channel to open the connection.
-                var anEncodedOpenConnection = myProtocolFormatter.encodeOpenConnectionMessage(myResponseReceiverId);
-                if (anEncodedOpenConnection !== null)
-                {
-                    myWebSocket.send(anEncodedOpenConnection);
-                }
+            if (aSelf.isConnected()) {
+                reject(new Error("Connection is already open."));
+            }
 
-                // Notify the connection is open.
-                var aDuplexChannelEventArgs = new DuplexChannelEventArgs(myChannelId, myResponseReceiverId);
-                aSelf.onConnectionOpened(aDuplexChannelEventArgs);
-            };
-            myWebSocket.onclose = function(evt)
-            {
-                aSelf.closeConnection();
-            };
-            myWebSocket.onmessage = function(evt)
-            {
-                // Decode incoming message.
-                var aProtocolMessage = null;
-                try
-                {
-                    aProtocolMessage = myProtocolFormatter.decodeMessage(evt.data);
-                }
-                catch (err)
-                {
-                    logError(myTracedObject + "failed to decode the incoming message.", err);
-                    aProtocolMessage = new ProtocolMessage("Unknonw", "", null);
-                }
+            try {
+                myWebSocket = new WebSocket(myChannelId);
 
-                try
-                {
-                    // Notify the message was received.
-                    var aDuplexChannelMessageEventArgs = new DuplexChannelMessageEventArgs(myChannelId, aProtocolMessage.Message, myResponseReceiverId);
-                    aSelf.onResponseMessageReceived(aDuplexChannelMessageEventArgs);
-                }
-                catch (err)
-                {
-                    logError(myTracedObject + "detected a failure in the event handler.", err);
-                }
-            };
+                // We want to use ArrayBuffer for data transfer.
+                myWebSocket.binaryType = "arraybuffer";
 
-            myWebSocket.onerror = function(evt)
-            {
-                console.error(myTracedObject + "detected a WebSocket error.");
-            };
-        }
-        catch (err)
-        {
-            // Note: In case the service is not running the openConnection will not fail
-            // but onClose() callback will be called - this is the JavaScript WebSocket behavior.
-            logError(myTracedObject + "failed to open connection.", err);
-            closeConnection();
-            throw err;
-        }
+                // Subscribe in WebSocket to receive notifications.
+                
+                myWebSocket.onopen = function (evt) {
+                    // Ask duplex input channel to open the connection.
+                    var anEncodedOpenConnection = myProtocolFormatter.encodeOpenConnectionMessage(myResponseReceiverId);
+                    if (anEncodedOpenConnection !== null) {
+                        myWebSocket.send(anEncodedOpenConnection);
+                    }
+
+                    // Notify the connection is open.
+                    var aDuplexChannelEventArgs = new DuplexChannelEventArgs(myChannelId, myResponseReceiverId);
+                    aSelf.onConnectionOpened(aDuplexChannelEventArgs);
+
+                    resolve();
+                };
+                myWebSocket.onclose = function (evt) {
+                    aSelf.closeConnection();
+                };
+                myWebSocket.onmessage = function (evt) {
+                    // Decode incoming message.
+                    var aProtocolMessage = null;
+                    try {
+                        aProtocolMessage = myProtocolFormatter.decodeMessage(evt.data);
+                    }
+                    catch (err) {
+                        logError(myTracedObject + "failed to decode the incoming message.", err);
+                        aProtocolMessage = new ProtocolMessage("Unknonw", "", null);
+                    }
+
+                    try {
+                        // Notify the message was received.
+                        var aDuplexChannelMessageEventArgs = new DuplexChannelMessageEventArgs(myChannelId, aProtocolMessage.Message, myResponseReceiverId);
+                        aSelf.onResponseMessageReceived(aDuplexChannelMessageEventArgs);
+                    }
+                    catch (err) {
+                        logError(myTracedObject + "detected a failure in the event handler.", err);
+                    }
+                };
+
+                myWebSocket.onerror = function (error) {
+                    console.error(`${myTracedObject} detected a WebSocket error. ${error}`);
+                    reject(error);
+                };
+            }
+            catch (err) {
+                // Note: In case the service is not running the openConnection will not fail
+                // but onClose() callback will be called - this is the JavaScript WebSocket behavior.
+                logError(myTracedObject + "failed to open connection.", err);
+                closeConnection();
+                reject(err);
+            }
+        });
     };
 
     /**
@@ -1737,12 +1730,11 @@ function WebSocketDuplexOutputChannel(webSocketUri, responseReceiverId, protocol
      */
     this.isConnected = function()
     {
-        if (myWebSocket === null)
-        {
-            return false;
+        if (myWebSocket !== null && myWebSocket.readyState === 1) {
+            return true;
         }
 
-        return true;
+        return false;
     };
 
     /**
